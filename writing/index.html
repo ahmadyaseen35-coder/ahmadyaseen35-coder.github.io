@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Writing — Ahmad Ammar</title>
+<meta name="description" content="Notes on running AI coding agents in production: enforcement below the model, measuring practice adoption, and the failure modes that survive a green check." />
+<style>
+  :root{--gold:#b8860b;--dark:#1a1a1a;--gray:#555;--bg:#f7f7f5;--line:#e3e3df}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--dark);font:16px/1.75 'Segoe UI',Tahoma,Arial,sans-serif}
+  header{background:linear-gradient(135deg,#1a1a1a,#3a3a3a);color:#fff;padding:60px 20px}
+  header .wrap{max-width:720px;margin:0 auto}
+  header .en{color:var(--gold);font-size:.9rem;letter-spacing:3px;text-transform:uppercase}
+  header h1{font-size:2.1rem;margin-top:10px;font-weight:600}
+  header p{margin-top:14px;color:#ccc;max-width:56ch}
+  main{max-width:720px;margin:0 auto;padding:40px 20px 60px}
+  article{background:#fff;border-radius:10px;padding:26px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:18px}
+  article h2{font-size:1.2rem;line-height:1.4;margin-bottom:8px}
+  article h2 a{color:var(--dark);text-decoration:none}
+  article h2 a:hover{color:#8a6508}
+  article .date{color:#888;font-size:.85rem;letter-spacing:.5px}
+  article p{color:var(--gray);margin-top:10px;font-size:.97rem}
+  article .links{margin-top:14px;font-size:.88rem}
+  article .links a{color:#8a6508;text-decoration:none;margin-right:14px}
+  footer{border-top:1px solid var(--line);max-width:720px;margin:0 auto;padding:22px 20px 50px;color:#777;font-size:.88rem}
+  footer a{color:#8a6508;text-decoration:none}
+  @media(max-width:600px){header h1{font-size:1.6rem}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="en">Ahmad Ammar</div>
+  <h1>Writing</h1>
+  <p>Notes from running AI coding agents on production work — mostly about the gap between a practice being written down and a practice actually happening.</p>
+</div></header>
+<main>
+
+  <article>
+    <div class="date">21 August 2026</div>
+    <h2><a href="/writing/audit-the-counter.html">Your AI agent&rsquo;s best-practices doc is a wish. So was the number I used to prove it.</a></h2>
+    <p>I measured whether my agents followed my model-routing rule. They didn&rsquo;t &mdash; 0.03% of output. So I moved the rule below the decision. A month later I found the counter itself had been blind to the one surface that mattered.</p>
+    <div class="links">
+      <a href="/writing/audit-the-counter.html">Read &rarr;</a>
+      <a href="https://dev.to/ahmadammar/your-ai-agents-best-practices-doc-is-a-wish-so-was-the-number-i-used-to-prove-it-p5o">DEV.to</a>
+    </div>
+  </article>
+
+  <article>
+    <div class="date">1 August 2026</div>
+    <h2><a href="/writing/agent-handoff-channel.md">How parallel AI agents should talk to each other (and the bug that proved it)</a></h2>
+    <p>Two independent agent sessions needed to message each other. Relaying copy-paste myself failed in two specific ways, and neither was a typo &mdash; which turned out to be the argument for a channel with provenance.</p>
+    <div class="links">
+      <a href="/writing/agent-handoff-channel.md">Read &rarr;</a>
+    </div>
+  </article>
+
+</main>
+<footer>Ahmad Ammar &middot; <a href="/">Alumar Aluminium</a> &middot; <a href="https://dev.to/ahmadammar">DEV.to</a></footer>
+</body>
+</html>
