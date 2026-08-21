@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Small local models: what actually holds up when you re-run the measurement</title>
+<meta name="description" content="I run a small local model — **Qwen3.5 4B via Ollama** — as one deterministic-checked step inside some tooling. This is what still reproduces today, on name" />
+<style>
+  :root{--gold:#b8860b;--dark:#1a1a1a;--gray:#444;--bg:#f7f7f5;--line:#e3e3df}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--dark);font:16px/1.75 'Segoe UI',Tahoma,Arial,sans-serif;-webkit-text-size-adjust:100%}
+  header{background:linear-gradient(135deg,#1a1a1a,#3a3a3a);color:#fff;padding:44px 20px}
+  header .wrap{max-width:720px;margin:0 auto}
+  header a.back{color:var(--gold);text-decoration:none;font-size:.9rem;letter-spacing:2px;text-transform:uppercase}
+  header h1{font-size:1.9rem;line-height:1.3;margin-top:14px;font-weight:600}
+  main{max-width:720px;margin:0 auto;padding:36px 20px 60px}
+  main p{margin:0 0 20px}
+  main h2{font-size:1.3rem;margin:38px 0 14px;border-left:4px solid var(--gold);padding-left:12px}
+  main ol,main ul{margin:0 0 20px 22px}
+  main li{margin-bottom:10px}
+  main code{background:#ececE8;padding:2px 6px;border-radius:4px;font-family:Consolas,monospace;font-size:.9em}
+  main a{color:#8a6508}
+  footer{border-top:1px solid var(--line);max-width:720px;margin:0 auto;padding:22px 20px 50px;color:#777;font-size:.88rem}
+  footer a{color:#8a6508;text-decoration:none}
+  @media(max-width:600px){header h1{font-size:1.5rem}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><a class="back" href="/writing/">&larr; Writing</a><h1>Small local models: what actually holds up when you re-run the measurement</h1></div></header>
+<main>
+<p>I run a small local model — <strong>Qwen3.5 4B via Ollama</strong> — as one deterministic-checked step inside some tooling. This is what still reproduces today, on named versions, with the scripts to check it yourself. Where a result did <em>not</em> survive re-running, that is here too, because that turned out to be the most useful part.</p>
+<p>Versions, so you can pin them: <strong>Ollama 0.32.6</strong>, model <code>qwen3.5:4b</code>, digest <code>2a654d98e6fb</code>, Q4_K_M.</p>
+<p>None of this is a new technique. The underlying pattern is <strong>Best-of-N with verifiers</strong>, which is well established. These are measurements inside a known pattern.</p>
+<h2><code>think: true</code> can hand you an empty answer</h2>
+<p>With thinking enabled, the chain-of-thought and the final answer share one token budget. When the thinking consumes it, <code>response</code> comes back empty while <code>thinking</code> holds the content. Code that reads only <code>response</code> sees <code>""</code> and concludes the call failed. It didn't.</p>
+<p>Measured today, one-line question, <code>num_predict: 128</code>:</p>
+<p>``<code> think:false    response=200   thinking=0 think:true     response=0     thinking=483 </code>``</p>
+<p>Fix: for extraction and structured tasks, read both fields, or turn thinking off. Whether it triggers depends on your budget — tighten <code>num_predict</code> to make it likely.</p>
+<p>(Separately: there is evidence that pushing long chain-of-thought onto small models can <em>hurt</em> accuracy — Luo et al., <em>"Through the Valley: Path to Effective Long CoT Training for Small Language Models,"</em> EMNLP 2025. That is a training-time effect, not this API field-routing quirk. Different problem; noting it so the two don't get conflated.)</p>
+<h2>Self-critique made the 4B worse</h2>
+<p>I asked it to critique its own answer. It verbally retracted the wrong fix — "Remove the check proposed above" — and then re-emitted that same wrong fix in code, in the same reply.</p>
+<p>One anecdotal example of what <strong>Huang et al.</strong> measure at scale in <em>"Large Language Models Cannot Self-Correct Reasoning Yet"</em> (arXiv:2310.01798, ICLR 2024): on GSM8K, GPT-4's own accuracy drops <strong>95.5% → 91.5% → 89.0%</strong> under intrinsic self-critique.</p>
+<p>Self-critique is not a free reliability layer. You need an external judge, not the model grading itself.</p>
+<h2>Request precision beat model depth</h2>
+<p>Same input, two prompts. Asking for output keys that match the source's naming <em>literally</em> moved accuracy <strong>7/10 → 10/10</strong>. A numeric spec — "each row has exactly 3 cells and 4 dashes" — fixed a table that a descriptive spec — "a well-formed separator row" — kept producing broken.</p>
+<p>Well-worn prompt-engineering advice. Included only because I have the before/after on the same input.</p>
+<h2>The external judge needs its own negative control</h2>
+<p>Here is the part I got wrong for a while, and it is the expensive one.</p>
+<p>"Put a deterministic external check on the output" is half an instruction. I had that check. It passed a fabrication.</p>
+<p>A merge task, two columns into one, 81 rows. The model invented 5 values that were never in the input. The check returned <code>PASS</code>, <code>autoVerified: true</code>, and <strong>exit code 0</strong>. It was not bypassed and it did not crash. Every invented value was drawn from a closed vocabulary — every value that <em>could</em> appear did appear somewhere in the input — so every token-level assertion the check ran was satisfied. The judge was asked a question that could not tell the two cases apart.</p>
+<p>So the rule I would give someone starting this:</p>
+<p>&gt; <strong>A judge that has never been made to fail has not been shown to pass.</strong></p>
+<p>Build the check, then feed it material it <em>must</em> reject. If it stays green, you don't have a judge — you have a second thing that agrees with the model. And when the output is a pure function of the input, compare it <em>to the input</em> mechanically before accepting it. An exit code is not evidence.</p>
+<h2>And one result that did not survive</h2>
+<p>An earlier note of mine reported that this model drops the space at a Latin↔Arabic boundary — ask for <code>hello مرحبا</code>, get back <code>helloمرحبا</code>. I had it in 2 of 2 runs and treated it as a real defect.</p>
+<p>Re-running it today: <strong>53 generations. Zero reproductions.</strong> Seven prompt shapes on the pinned model, six of those shapes repeated on two other local 4B variants, plus the original echo prompt.</p>
+<p>I can't tell you it was fixed, and I'm not going to pretend otherwise — the model file on disk is the same one that was there when I first measured it. Prompt shape doesn't explain it either; I tried the transform-style tasks that were closer to the original context and they came back clean too.</p>
+<p>What I can tell you is that a result I would have published as a measured defect was, six weeks later, unreproducible — and I only know that because re-running it was one command. Both scripts are in the repo; the boundary one is currently a null result, and it stays in, because a null result you can run is worth more than a claim you can't.</p>
+<p>The check itself is four lines and still worth having if you ship bilingual text — English-centric output assertions never look at the script boundary, so nothing else in your test suite is watching that seam.</p>
+<h2>The through-line</h2>
+<p>A small model doesn't get better when you ask it to think more. It gets better when you <strong>reduce what it has to decide</strong>, put a <strong>deterministic external judge</strong> on its output — and then <strong>prove the judge can fail</strong>.</p>
+<p>That framing isn't mine. DSPy's <code>BestOfN</code> with a custom <code>reward_fn</code> reproduces most of this shape; CodeT and AlphaCode filter samples by executing tests; Guardrails' <code>on_fail=reask</code> and Instructor drive retry-on-failure. Even graduated exit codes for agent steps are the <strong>Nagios</strong> convention (<code>0</code> OK / <code>1</code> WARNING / <code>2</code> CRITICAL), about 25 years old.</p>
+<p>Reproduction scripts, with versions pinned: <a href="https://github.com/ahmadyaseen35-coder/local-model-field-notes-repro">https://github.com/ahmadyaseen35-coder/local-model-field-notes-repro</a></p>
+</main>
+<footer>Ahmad Ammar &middot; <a href="/writing/">more writing</a> &middot; <a href="/">Alumar Aluminium</a></footer>
+</body>
+</html>
