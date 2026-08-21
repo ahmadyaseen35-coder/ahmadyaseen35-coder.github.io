@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your AI agent's best-practices doc is a wish. So was the number I used to prove it.</title>
+<meta name="description" content="You wrote the `AGENTS.md`. Or the `CLAUDE.md`, or the team best-practices doc. A month later, how many of those practices does any agent actually follow? I" />
+<style>
+  :root{--gold:#b8860b;--dark:#1a1a1a;--gray:#444;--bg:#f7f7f5;--line:#e3e3df}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--dark);font:16px/1.75 'Segoe UI',Tahoma,Arial,sans-serif;-webkit-text-size-adjust:100%}
+  header{background:linear-gradient(135deg,#1a1a1a,#3a3a3a);color:#fff;padding:44px 20px}
+  header .wrap{max-width:720px;margin:0 auto}
+  header a.back{color:var(--gold);text-decoration:none;font-size:.9rem;letter-spacing:2px;text-transform:uppercase}
+  header h1{font-size:1.9rem;line-height:1.3;margin-top:14px;font-weight:600}
+  main{max-width:720px;margin:0 auto;padding:36px 20px 60px}
+  main p{margin:0 0 20px}
+  main h2{font-size:1.3rem;margin:38px 0 14px;border-left:4px solid var(--gold);padding-left:12px}
+  main ol,main ul{margin:0 0 20px 22px}
+  main li{margin-bottom:10px}
+  main code{background:#ececE8;padding:2px 6px;border-radius:4px;font-family:Consolas,monospace;font-size:.9em}
+  main a{color:#8a6508}
+  footer{border-top:1px solid var(--line);max-width:720px;margin:0 auto;padding:22px 20px 50px;color:#777;font-size:.88rem}
+  footer a{color:#8a6508;text-decoration:none}
+  @media(max-width:600px){header h1{font-size:1.5rem}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><a class="back" href="/writing/">&larr; Writing</a><h1>Your AI agent's best-practices doc is a wish. So was the number I used to prove it.</h1></div></header>
+<main>
+<p>You wrote the <code>AGENTS.md</code>. Or the <code>CLAUDE.md</code>, or the team best-practices doc. A month later, how many of those practices does any agent actually follow? If you can't answer with a number, you don't have practices — you have wishes.</p>
+<p>I learned that twice. The second time was worse.</p>
+<h2>Documented ≠ adopted</h2>
+<p>I run three production projects on Claude Code, and I'd written a model-routing rule into my shared config: mechanical work — inventory, renames, boilerplate — goes to the cheap model; hard reasoning — architecture, security, migrations — goes to the expensive one. I wrote it, promoted it to an auto-adopted practice, felt good about it.</p>
+<p>Then I built a small usage analyzer to see where the tokens actually went. Zero dependencies — it just reads the session transcripts the tool already writes to disk. The cheap model came back at <strong>0.03% of output</strong>: 18k tokens against tens of millions. Not "underused." A rounding error.</p>
+<p>Documentation is not a control surface. The doc had not routed a single task.</p>
+<h2>The fix that doesn’t work</h2>
+<p>The reflex is to write it again, bigger. Add a reminder. Write a third markdown file about the two markdown files nobody is applying.</p>
+<p>This is the same mistake as putting a budget in a prompt. "Be mindful of the model tier" is a wish, exactly like "max 8 searches" is a wish — a model sails past both the moment the task still feels unfinished. If your practice lives only in a doc the session may never open, you do not have a practice. You have a hope with good formatting.</p>
+<h2>Measure, then enforce below the decision</h2>
+<p>A practice that lives only in a doc fails for the same structural reason a budget in a prompt fails: nothing forces it into the path where the decision is made. So move it below that path.</p>
+<p><strong>Measure adoption from data you already generate.</strong> You cannot enforce what you cannot see. The transcripts already record which model ran, which tools fired, which skills were invoked. A zero-dependency reader turns that into an adoption number per practice. That is how I learned the routing rule was near zero — by counting, not guessing.</p>
+<p><strong>Enforce at the boundary the model cannot skip.</strong> Every session hits session-start. That is the injection surface. Instead of a doc the session may never load, the practice gets printed into the session-start context deterministically: static strings, no extra generation cost, fails open. Same principle as a budget belonging in the harness rather than the prompt — put the practice in the layer the model passes through by construction, not the one it has to choose to read.</p>
+<h2>Then I audited the counter</h2>
+<p>A month later I went to re-measure, and found the reader had been lying to me the entire time.</p>
+<p>Subagent work is written to a separate sidechain file under the session directory. My reader was not recursive. It never opened those files. Every token a subagent spent was invisible to it.</p>
+<p>That matters because of <em>where the cheap model actually runs</em>. Measured properly: <strong>100% of the cheap model's output was subagent work.</strong> Zero on the main thread. The one surface the rule governs was the exact surface the counter could not see.</p>
+<p>So 0.03% was never an adoption number. It was an artifact of a blind spot. The commit that fixed the reader is titled, accurately, <code>read subagent sidechains — "Haiku=0" was a measurement artifact</code>.</p>
+<p>Here is the part that rescues the story: the corrected figure is <strong>0.75%</strong> — 370k tokens out of 49.4M. Still terrible. The conclusion survived. The evidence for it did not.</p>
+<p>That is the real lesson, and it is less comfortable than the first one: <strong>a measurement you never audit is also a wish.</strong> It just wears a number, which makes it harder to doubt. I spent a month more confident than my instrument had earned.</p>
+<h2>The honest caveat</h2>
+<p>Injection is not adoption either. Firing the reminder every session is necessary, not sufficient. The arbiter is the next measurement cycle — if the cheap-model share climbs, the injection worked; if it does not, the problem is deeper than reminding, and I will know, because I am measuring. A practice you inject but never re-measure is just a wish that loads faster.</p>
+<h2>The moves, in order</h2>
+<ol>
+<li><strong>Measure adoption</strong> from data you already generate. The transcript is a telemetry stream you are not reading.</li>
+<li><strong>Audit the instrument.</strong> Do not ask whether it looks right — feed it a case whose answer you already know and check that the number comes back. A counter that has never been made to fail has never really passed. Mine had no such test, and when the missing surface finally showed up it moved the figure by more than twenty times.</li>
+<li><strong>Inject the practice</strong> where the model passes through by construction, not into a doc it may never open.</li>
+<li><strong>Re-measure.</strong> The doc was never the mechanism. The number is — once you have earned the right to trust it.</li>
+</ol>
+<p>Step 1 usually tells you your existing docs are decorative. That is not a reason to write better docs; it is the reason to stop treating docs as controls. Step 2 occasionally tells you step 1 was decorative too.</p>
+</main>
+<footer>Ahmad Ammar &middot; <a href="/writing/">more writing</a> &middot; <a href="/">Alumar Aluminium</a></footer>
+</body>
+</html>
