@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your AI agents pass gates they should fail</title>
+<meta name="description" content="I measure where AI agent pipelines report success while producing wrong output, and build the layer that catches it. Evidence from production systems, not claims." />
+<style>
+  :root{--gold:#b8860b;--dark:#1a1a1a;--gray:#444;--bg:#f7f7f5;--line:#e3e3df;--red:#a03028}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--dark);font:16px/1.75 'Segoe UI',Tahoma,Arial,sans-serif;-webkit-text-size-adjust:100%}
+  header{background:linear-gradient(135deg,#1a1a1a,#3a3a3a);color:#fff;padding:64px 20px}
+  header .wrap{max-width:760px;margin:0 auto}
+  header .eyebrow{color:var(--gold);font-size:.85rem;letter-spacing:3px;text-transform:uppercase}
+  header h1{font-size:2.1rem;line-height:1.3;margin:14px 0 16px;font-weight:600}
+  header p{color:#d5d5d5;max-width:60ch;font-size:1.05rem}
+  main{max-width:760px;margin:0 auto;padding:44px 20px 20px}
+  h2{font-size:1.35rem;margin:44px 0 16px;border-left:4px solid var(--gold);padding-left:12px}
+  h2:first-child{margin-top:0}
+  p{margin:0 0 18px}
+  .lead{font-size:1.08rem}
+  ul{margin:0 0 20px 22px}
+  li{margin-bottom:12px}
+  code{background:#ececE8;padding:2px 6px;border-radius:4px;font-family:Consolas,monospace;font-size:.9em}
+  .ev{background:#fff;border-radius:10px;padding:22px 24px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:16px}
+  .ev .num{color:var(--red);font-weight:700;font-size:1.05rem;display:block;margin-bottom:6px}
+  .ev .what{color:var(--gray);font-size:.96rem}
+  .box{background:#fff;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;padding:20px 24px;margin:0 0 22px;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .box strong{color:var(--dark)}
+  table{width:100%;border-collapse:collapse;margin:0 0 22px;font-size:.96rem}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{color:var(--gray);font-weight:600;font-size:.85rem;text-transform:uppercase;letter-spacing:.5px}
+  a{color:#8a6508}
+  .cta{background:#1a1a1a;color:#fff;border-radius:10px;padding:28px;margin:36px 0 0}
+  .cta h2{border:none;padding:0;margin:0 0 10px;color:#fff}
+  .cta p{color:#d5d5d5;margin-bottom:0}
+  .cta a{color:var(--gold);font-weight:600}
+  footer{border-top:1px solid var(--line);max-width:760px;margin:0 auto;padding:24px 20px 56px;color:#777;font-size:.88rem}
+  footer a{color:#8a6508;text-decoration:none}
+  @media(max-width:600px){header h1{font-size:1.6rem}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="eyebrow">Agent reliability</div>
+  <h1>Your AI agents pass gates they should fail</h1>
+  <p>Green check, wrong output, zero alerts. I measure where that happens in your pipeline and build the layer that catches it.</p>
+</div></header>
+
+<main>
+
+<p class="lead">Teams shipping LLM agents almost always add a check: a validator, a schema, an exit code, a review step. The check passes. The work looks done.</p>
+
+<p>Then something wrong reaches production anyway, and the postmortem finds the check was never capable of catching it. It wasn't bypassed. It wasn't broken. It was asked a question that couldn't tell right from wrong.</p>
+
+<p>This is the failure mode I work on, and it is badly under-measured because every symptom of it looks like success.</p>
+
+<h2>Evidence, from systems I run</h2>
+
+<div class="ev">
+  <span class="num">5 fabricated values out of 81 &mdash; and the gate returned PASS, exit code 0</span>
+  <span class="what">A model merging two columns invented values that were never in the input. Every invented value came from a closed vocabulary, so every token-level assertion the validator ran was satisfied. The gate did exactly what it was written to do, and the output was wrong.</span>
+</div>
+
+<div class="ev">
+  <span class="num">A guard caught 1 item out of 120</span>
+  <span class="what">It was in place, running, and green. Measuring what it actually caught showed it was a crutch, not a control &mdash; the coverage lived somewhere else entirely.</span>
+</div>
+
+<div class="ev">
+  <span class="num">A usage counter was blind to 100% of the surface it was meant to measure</span>
+  <span class="what">It reported a routing rule at 0.03% adoption. The reader was never opening the files where that work lived. The number was an artifact, and it drove a month of decisions before anyone re-ran it.</span>
+</div>
+
+<div class="ev">
+  <span class="num">Two independent classification passes agreed 84.4% &mdash; and 20 of 28 disagreements leaned one way</span>
+  <span class="what">Systematic, not random. A single pass would have mislabelled 19 items out of 180. Anything downstream treating one pass as ground truth inherits that bias silently.</span>
+</div>
+
+<div class="box">
+  <strong>The rule underneath all four:</strong> a check that has never been made to fail has not been shown to pass. Most teams test that their guard accepts good input. Far fewer test that it rejects bad input &mdash; and that is the half that actually protects you.
+</div>
+
+<h2>What I do</h2>
+
+<table>
+  <tr><th>Engagement</th><th>What you get</th></tr>
+  <tr>
+    <td><strong>Reliability audit</strong><br><span class="what">1&ndash;2 weeks</span></td>
+    <td>I take your agent pipeline and find where it reports success while producing wrong output. Deliverable: reproducible failure cases with the exact input, the green signal it produced, and why the existing check couldn't see it.</td>
+  </tr>
+  <tr>
+    <td><strong>Gate hardening</strong><br><span class="what">2&ndash;4 weeks</span></td>
+    <td>I build the missing layer: deterministic checks, negative controls that prove each guard can fail, and comparison against the input where output should be a pure function of it. Zero-noise, fail-open, no added latency at generation time.</td>
+  </tr>
+  <tr>
+    <td><strong>Adoption measurement</strong><br><span class="what">1 week</span></td>
+    <td>You wrote the practices doc. I tell you, with a number, how many of them your agents actually follow &mdash; read from the telemetry you already generate.</td>
+  </tr>
+</table>
+
+<h2>How I work</h2>
+<ul>
+  <li><strong>Evidence over assertion.</strong> Every finding ships with a reproduction. If I can't reproduce it, I tell you it didn't reproduce &mdash; including when that undercuts something I said earlier.</li>
+  <li><strong>Negative controls by default.</strong> Every guard I build is shown failing on material it must reject before it is trusted on material it should pass.</li>
+  <li><strong>Your stack, not mine.</strong> I don't sell a framework. The layer lives in your codebase and outlives the engagement.</li>
+  <li><strong>Nothing leaves without a gate.</strong> I've built the approval and provenance layers I'd want applied to my own work &mdash; hash-locked artifacts, human confirmation on outbound actions, audit trails.</li>
+</ul>
+
+<h2>Where I come from</h2>
+<p>I run four production systems on a fleet of coding agents, with the enforcement layer I built underneath them. The measurements above are from that work, not from a lab. I write about it publicly &mdash; including the times the measurement itself turned out to be wrong.</p>
+<p><a href="/writing/">Read the write-ups &rarr;</a></p>
+
+<div class="cta">
+  <h2>Start with the audit</h2>
+  <p>Tell me about your agent pipeline and where you suspect it's reporting success it hasn't earned. If I don't think I can find anything worth your money, I'll say so before you spend any.</p>
+  <p style="margin-top:14px"><a href="mailto:ahmadyaseen35@gmail.com?subject=Agent%20reliability%20audit">ahmadyaseen35@gmail.com</a></p>
+</div>
+
+</main>
+<footer>Ahmad Ammar &middot; <a href="/writing/">writing</a> &middot; <a href="https://github.com/ahmadyaseen35-coder">github</a></footer>
+</body>
+</html>
